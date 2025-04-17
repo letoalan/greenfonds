@@ -69,6 +69,10 @@
                 font-size: 0.9rem;
             }
         }
+        .category-row {
+            background-color: #e0f2f1;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -89,63 +93,64 @@
 
     <script>
         const initialOrder = [
-            'Brésil',
-            'Chili',
-            'Emirats arabes unis',
-            'États-Unis',
-            'Russie',
-            'France',
-            'Haïti',
-            'Ile Maurice',
-            'Sénégal',
-            'Vanuatu',
-            'Mexique',
-            'République Populaire de Chine'
+            'Brésil', 'Chili', 'Emirats arabes unis', 'États-Unis', 'Russie', 'France',
+            'Haïti', 'Ile Maurice', 'Sénégal', 'Vanuatu', 'Mexique', 'République Populaire de Chine'
         ];
 
         const countriesData = {
-            'Brésil': { contribution: 0, population: 214, category: 'emergent-high' },
-            'Chili': { contribution: 0, population: 19, category: 'emergent-medium' },
-            'Emirats arabes unis': { contribution: 0, population: 9, category: 'favored' },
-            'États-Unis': { contribution: 0, population: 331, category: 'favored' },
-            'Russie': { contribution: 0, population: 144, category: 'favored-medium' },
-            'France': { contribution: 0, population: 67, category: 'favored' },
-            'Haïti': { contribution: 0, population: 11, category: 'precarious-super' },
-            'Ile Maurice': { contribution: 0, population: 1.3, category: 'precarious' },
-            'Sénégal': { contribution: 0, population: 17, category: 'precarious' },
-            'Vanuatu': { contribution: 0, population: 0.3, category: 'precarious-super' },
-            'Mexique': { contribution: 0, population: 126, category: 'emergent-medium' },
-            'République Populaire de Chine': { contribution: 0, population: 1410, category: 'emergent-high' }
+            'Brésil': { contribution: 0, population: 214, category: 'emergent-vulnerable' },
+            'Chili': { contribution: 0, population: 19, category: 'emergent-low' },
+            'Emirats arabes unis': { contribution: 0, population: 9, category: 'favored-low' },
+            'États-Unis': { contribution: 0, population: 331, category: 'favored-low' },
+            'Russie': { contribution: 0, population: 144, category: 'favored' },
+            'France': { contribution: 0, population: 67, category: 'favored-low' },
+            'Haïti': { contribution: 0, population: 11, category: 'precarious-high' },
+            'Ile Maurice': { contribution: 0, population: 1.3, category: 'precarious-vulnerable' },
+            'Sénégal': { contribution: 0, population: 17, category: 'precarious-vulnerable' },
+            'Vanuatu': { contribution: 0, population: 0.3, category: 'precarious-high' },
+            'Mexique': { contribution: 0, population: 126, category: 'emergent-vulnerable' },
+            'République Populaire de Chine': { contribution: 0, population: 1410, category: 'emergent-vulnerable' }
         };
 
         const categoryWeights = {
-            'precarious-super': 1.5,
-            'precarious': 1.3,
-            'emergent-high': 1.1,
-            'emergent-medium': 1.0,
-            'favored-medium': 0.5,
-            'favored': 0.1
+            'precarious-high': 6,
+            'precarious-vulnerable': 5,
+            'emergent-vulnerable': 4,
+            'emergent-low': 3,
+            'favored-low': 2,
+            'favored': 1
         };
 
         const distributeFunds = (total) => {
-            const nationalFund = total * 0.65;
-            const globalFund = total * 0.35;
-            const distribution = {};
+            const resteDuMonde = total * 0.35;
+            const categories = {};
+            let totalScore = 0;
 
-            let weightedSum = 0;
-            for (const [name, data] of Object.entries(countriesData)) {
-                const weight = categoryWeights[data.category] || 1;
-                weightedSum += weight * data.population;
+            for (const [country, data] of Object.entries(countriesData)) {
+                const score = data.population * categoryWeights[data.category];
+                categories[data.category] = (categories[data.category] || 0) + score;
+                totalScore += score;
             }
 
-            for (const [name, data] of Object.entries(countriesData)) {
-                const weight = categoryWeights[data.category] || 1;
-                const ratio = (weight * data.population) / weightedSum;
-                distribution[name] = Math.round(globalFund * ratio);
+            const distribution = { 'Reste du monde': Math.round(resteDuMonde) };
+
+            const categoryAllocations = {};
+            for (const [cat, score] of Object.entries(categories)) {
+                categoryAllocations[cat] = Math.round(resteDuMonde * (score / totalScore));
             }
 
-            distribution['Reste du monde'] = Math.round(globalFund);
+            // 65% en fonction des contributions
+            const nationalFunds = total * 0.65;
+            const contributionSum = Object.values(countriesData).reduce((sum, d) => sum + d.contribution, 0);
 
+            for (const [country, data] of Object.entries(countriesData)) {
+                const categoryShare = categoryAllocations[data.category] * ((data.population * categoryWeights[data.category]) /
+                    categories[data.category]);
+                const nationalShare = contributionSum > 0 ? nationalFunds * (data.contribution / contributionSum) : 0;
+                distribution[country] = Math.round(categoryShare + nationalShare);
+            }
+
+            distribution.categoryAllocations = categoryAllocations;
             return distribution;
         };
 
@@ -162,9 +167,19 @@
             resteRow.innerHTML = `
                 <td><strong>Reste du monde</strong></td>
                 <td>-</td>
-                <td><strong>${distribution['Reste du monde'].toLocaleString()}</strong></td>
+                <td><strong>${distribution['Reste du monde']?.toLocaleString() || 0}</strong></td>
             `;
             tbody.appendChild(resteRow);
+
+            for (const [cat, amount] of Object.entries(distribution.categoryAllocations)) {
+                const row = document.createElement('tr');
+                row.classList.add('category-row');
+                row.innerHTML = `
+                    <td colspan="2">${cat.replace('-', ' ').toUpperCase()}</td>
+                    <td>${amount.toLocaleString()}</td>
+                `;
+                tbody.appendChild(row);
+            }
 
             initialOrder.forEach(country => {
                 const data = countriesData[country];
